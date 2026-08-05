@@ -1,0 +1,24 @@
+## ignore notes text file 
+/notes.txt
+
+
+## ignore mac specific files 
+.DS_Store
+.LSOverride
+
+
+## ignore java compiled output & packages 
+*.class
+*.ctxt
+*.jar
+*.war
+*.ear
+
+## ignore maven build output 
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+dependency-reduced-pom.xml
