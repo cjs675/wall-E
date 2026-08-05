@@ -1,2 +1,7 @@
-# wall-E
-a lightweight WAL written in java
+# wall-E 
+
+A lightweight write-ahead log written in java 
+
+## Features 
+
+
