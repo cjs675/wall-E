@@ -13,6 +13,8 @@
 *.jar
 *.war
 *.ear
+*.iml
+.idea
 
 ## ignore maven build output 
 target/
