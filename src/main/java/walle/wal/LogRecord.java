@@ -44,9 +44,9 @@ public final class LogRecord {
     }
 
     /** Serializes this record to the on-disk wire format described above */
-    public byte[] encode throws IOException {
+    public byte[] encode() throws IOException {
         ByteArrayOutputStream payloadBuf = new ByteArrayOutputStream();
-        DataOutput Stream payload = new DataOutputStream(payloadBuf);
+        DataOutputStream payload = new DataOutputStream(payloadBuf);
 
         payload.writeLong(lsn);
         payload.writeByte(type.ordinal());
@@ -69,7 +69,7 @@ public final class LogRecord {
         DataOutputStream record = new DataOutputStream(recordBuf);
         int lengthAfterLengthField = 8 /* checksum */ + payloadBytes.length;
         record.writeInt(lengthAfterLengthField);
-        record.writeInt(checksum);
+        record.writeLong(checksum);
         record.write(payloadBytes);
 
         return recordBuf.toByteArray();
@@ -84,7 +84,7 @@ public final class LogRecord {
      * that follow don't check out --> "torn write" case
      * (crash happened mid-write) that a recovering DB must detect & stop at
      */
-     public statuc LogRecord decode(DataInputStream in) throws IOException, CorruptRecordException {
+     public static LogRecord decode(DataInputStream in) throws IOException, CorruptRecordException {
          int length;
 
          try {
@@ -98,28 +98,63 @@ public final class LogRecord {
              throw new CorruptRecordException("Impossible record length: " + length);
          }
 
-         byte[] rest = nenw byte[length];
+         byte[] rest = new byte[length];
          int totalRead = 0;
 
          while (totalRead < length) {
              int n = in.read(rest, totalRead, length - totalRead);
              if (n == -1) {
                  // length header detected but file ends before
-                 // promised number of bytes arrived --> classic casse of torn write
+                 // promised number of bytes arrived --> classic case of torn write
                  // from a mid-record crash
                  throw new CorruptRecordException(
                          "Truncated record: expected " + length + " bytes, got " + totalRead);
-                 )
-                 totalRead += n;
              }
-             DataInputStream payload = new DataInputStream(new ByteArrayInputSteam(payloadBytes));
-             long lsn = payload.readLong();
-             RecordType type = RecordType.values()[payload.readBytes()];
+             totalRead += n;
+         }
+         DataInputStream body = new DataInputStream(new ByteArrayInputStream(rest));
+         long storedChecksum = body.readLong();
 
-             int keyLen = payload.readInt();
-             byte[] keyBytes = new byte[keyLen];
-             payload.readFully(keyBytes);
-             String key = new String(keyBytes, "UTF-8");
+         byte[] payloadBytes = new byte[length - 8];
+         body.readFully(payloadBytes);
+
+         CRC32 crc = new CRC32();
+         crc.update(payloadBytes);
+         long actualChecksum = crc.getValue();
+
+         if (actualChecksum != storedChecksum) {
+             throw new CorruptRecordException(
+                     "Checksum mismatch: stored=" + storedChecksum + " actual=" + actualChecksum);
+         }
+
+         DataInputStream payload = new DataInputStream(new ByteArrayInputStream(payloadBytes));
+         long lsn = payload.readLong();
+
+         int typeOrdinal = payload.readByte();
+         RecordType[] types = RecordType.values();
+         if (typeOrdinal < 0 || typeOrdinal >= types.length) {
+             throw new CorruptRecordException("Invalid record type ordinal: " + typeOrdinal);
+         }
+         RecordType type = types[typeOrdinal];
+
+         int keyLen = payload.readInt();
+         if (keyLen < 0) {
+             throw new CorruptRecordException("Negative key length: " + keyLen);
+         }
+         byte[] keyBytes = new byte[keyLen];
+         payload.readFully(keyBytes);
+         String key = new String(keyBytes, "UTF-8");
+
+         int valLen = payload.readInt();
+         if (valLen < 0) {
+             throw new CorruptRecordException("Negative value length: " + valLen);
+         }
+
+         String val = null;
+         if (valLen > 0 || type == RecordType.PUT) {
+             byte[] valBytes = new byte[valLen];
+             payload.readFully(valBytes);
+             val = new String(valBytes, "UTF-8");
          }
 
          return new LogRecord(lsn, type, key, val);
