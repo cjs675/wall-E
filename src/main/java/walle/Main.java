@@ -2,16 +2,19 @@ package walle;
 
 import walle.wal.Wal;
 
-import java.io.RandomAcessFile;
+import java.io.RandomAccessFile;
 import java.nio.file.*;
 import java.util.Map;
 
 public class Main {
+    /**
+     * Orchestrates WAL lifecycle; demonstrates segment rotation, recovery, and crash-resilient truncation
+     */
     public static void main(String[] args) throws Exception {
-        Path dir = paths.get("wal-data-demo");
+        Path dir = Paths.get("wal-data-demo");
         deleteRecursively(dir); // clean slate for repeatable demo runs
 
-        System.out.println("=== Phase 1: nromal writes across multiple segments ===");
+        System.out.println("=== Phase 1: normal writes across multiple segments ===");
         // Tiny segment size (200 bytes) to visualize rotation happen
         // within a few records
         try (Wal wal = Wal.open(dir, 200)) {
@@ -27,7 +30,7 @@ public class Main {
         System.out.println();
         System.out.println("=== Phase 2: recover from a clean shutdown ===");
         Map<String, String> recovered = Wal.recover(dir);
-        System.out.println("Reconstructured state: " + recovered);
+        System.out.println("Reconstructed state: " + recovered);
 
         System.out.println();
         System.out.println("=== Phase 3: simulate a crash mid-write (torn record) ===");
@@ -37,7 +40,7 @@ public class Main {
         // we then manually corrupt the tail of the latest segment by
         // truncating a few bytes off the end, as if the process died
         // halfway through flushing the last record
-        Path lastSegment = listSegmentPaths(dir).get(listSegmentPaths(dir).size() - 1);
+        Path lastSegment = listSegmentsPaths(dir).get(listSegmentsPaths(dir).size() - 1);
         try (RandomAccessFile raf = new RandomAccessFile(lastSegment.toFile(), "rw")) {
             long len = raf.length();
             raf.setLength(len - 5); // chop off last 5 bytes -> torn record
@@ -49,7 +52,7 @@ public class Main {
         Map<String, String> recoveredAfterCrash = Wal.recover(dir);
         System.out.println("Reconstructed State: " + recoveredAfterCrash);
         System.out.println("Everything durably f-synced before the crash is still there");
-        System.out.println(" the torn record after it was correctly discarded, not corrupted in.");
+        System.out.println("the torn record after it was correctly discarded, not corrupted in.");
     }
 
     /**
@@ -76,6 +79,9 @@ public class Main {
         return segs;
     }
 
+    /**
+     * Deletes directory tree; ignores errors during removal
+     */
     private static void deleteRecursively(Path path) throws Exception {
         if (!Files.exists(path)) return;
         Files.walk(path)
