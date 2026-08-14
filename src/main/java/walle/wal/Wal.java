@@ -56,9 +56,9 @@ public final class Wal implements Closeable {
         return wal;
     }
 
-    private List<Path> listSegmentSorted() throws IOException {
+    private List<Path> listSegmentsSorted() throws IOException {
         List <Path> segments = new ArrayList<>();
-        if (!Files.exist(dir))
+        if (!Files.exists(dir))
             return segments;
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, SEGMENT_PREFIX + "*" + SEGMENT_SUFFIX)) {
             for (Path p : stream) segments.add(p);
@@ -79,7 +79,7 @@ public final class Wal implements Closeable {
     /** Scans every existing segment purely to find the highest LSN written so far. */
     private long scanExistingSegments() throws IOException {
         long maxLsn = 0;
-        for (Path seg : listSegmentSorted()) {
+        for (Path seg : listSegmentsSorted()) {
             currentSegmentIndex = segmentIndexOf(seg);
             try (DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newInputStream(seg)))) {
                 while (true) {
@@ -101,7 +101,7 @@ public final class Wal implements Closeable {
     }
 
     private void openLastSegmentForAppend() throws IOException {
-        List<Path> segments = listSegmentSorted();
+        List<Path> segments = listSegmentsSorted();
         Path target;
         if (segments.isEmpty()) {
             currentSegmentIndex = 1;
@@ -173,7 +173,7 @@ public final class Wal implements Closeable {
      */
     public static Map<String, String> recover(Path dir) throws IOException {
         Map<String, String> state = new LinkedHashMap<>();
-        Wal prove = new Wal(dir, Long.MAX_VALUE);
+        Wal probe = new Wal(dir, Long.MAX_VALUE);
         for (Path seg : probe.listSegmentsSorted()) {
             try (DataInputStream in = new DataInputStream(new BufferedInputStream(Files.newInputStream(seg)))) {
                 // Iterates log records; terminates recovery upon corruption detection
